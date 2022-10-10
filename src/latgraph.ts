@@ -1,7 +1,7 @@
 
-type Deps = (k: any, graph?: string) => any;
+export type Deps = (k: any, graph?: string) => any;
 
-interface LatGraph {
+export interface LatGraph {
   depGraphs: Record<string, Buffer>;
 
   isKey(key: any): boolean;
