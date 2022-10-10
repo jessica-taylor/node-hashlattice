@@ -1,8 +1,8 @@
 import vm2 = require('vm2');
 
-declare module 'vm2' {
-  export function runInNewContext(code: string, sandbox: Record<string, any>): any;
-}
+// declare module 'vm2' {
+//   export function runInNewContext(code: string, sandbox: Record<string, any>): any;
+// }
 
 interface Computation {
   code: string;

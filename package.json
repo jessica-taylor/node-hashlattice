@@ -4,6 +4,7 @@
   "description": "Peer to peer database using hash codes and semilattices",
   "main": "index.js",
   "dependencies": {
+    "canonical-json": "0.0.4",
     "vm2": "^3.9.11"
   },
   "devDependencies": {
