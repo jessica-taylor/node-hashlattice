@@ -1,20 +1,16 @@
 import vm2 = require('vm2');
 
-interface StringAnyMapping {
-  [name: string]: any;
-}
-
 declare module 'vm2' {
-  export function runInNewContext(code: string, sandbox: StringAnyMapping): any;
+  export function runInNewContext(code: string, sandbox: Record<string, any>): any;
 }
 
 interface Computation {
   code: string;
-  data: StringAnyMapping;
+  data: Record<string, any>;
 };
 
 function evalComputation(computation: Computation): any {
-  const sandbox: StringAnyMapping = {};
+  const sandbox: Record<string, any> = {};
   for (const name in computation.data) {
     sandbox[name] = computation.data[name];
   };
