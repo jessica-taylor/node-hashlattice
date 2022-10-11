@@ -11,15 +11,21 @@ export interface JSONObject {
 
 export interface JSONArray extends Array<JSON> { }
 
-export function hashBytes(bs: Buffer): Buffer {
-  return crypto.createHash('sha256').update(bs).digest();
+export interface Hash extends Buffer {
+  length: 32;
+}
+
+// export type Hash = FixedLengthArray<32, number>;
+
+export function hashBytes(bs: Buffer): Hash {
+  return crypto.createHash('sha256').update(bs).digest() as Hash;
 }
 
 export function jsonToBuffer(js: JSON): Buffer {
   return Buffer.from(cjson.stringify(js), 'utf8');
 }
 
-export function hashJSON(js: JSON): Buffer {
+export function hashJSON(js: JSON): Hash {
   return hashBytes(jsonToBuffer(js));
 }
 

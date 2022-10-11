@@ -1,9 +1,9 @@
-import {JSON} from './crypto_util';
+import {JSON, Hash} from './crypto_util';
 
 export type Deps = (k: JSON, graph?: string) => JSON;
 
 export interface LatGraph {
-  depGraphs: Record<string, Buffer>;
+  depGraphs: Record<string, Hash>;
 
   isKey(key: JSON): boolean;
 
