@@ -1,23 +1,23 @@
-import crypto = require('./crypto_util');
+import {JSON, hashJSON} from './crypto_util';
 import {LatGraph, Deps} from './latgraph';
 import cjson = require('canonical-json');
 
 
 interface LatMapping {
   latGraphs: Record<string, LatGraph>;
-  getMax(graphHash: Buffer, key: any): [any, Buffer];
+  getMax(graphHash: Buffer, key: JSON): [JSON, Buffer];
 }
 
-function cacheKey(graphHash: Buffer, key: any): string {
+function cacheKey(graphHash: Buffer, key: JSON): string {
   return `${graphHash.toString('hex')}${cjson.stringify(key)}`;
 }
 
-function mappingDeps(mapping: LatMapping, curr: Buffer, queries: Record<string, [any, Buffer]> = {}): Deps {
+function mappingDeps(mapping: LatMapping, curr: Buffer, queries: Record<string, [JSON, Buffer]> = {}): Deps {
   let currGraph = mapping.latGraphs[curr.toString('hex')];
   if (!currGraph) {
     throw new Error(`No graph with hash ${curr}`);
   }
-  return function(key: any, graphName?: string) {
+  return function(key: JSON, graphName?: string) {
     var graphHash = curr;
     if (graphName) {
       graphHash = currGraph.depGraphs[graphName];
@@ -25,13 +25,14 @@ function mappingDeps(mapping: LatMapping, curr: Buffer, queries: Record<string, 
         throw new Error(`No graph named ${graphName}`);
       }
     }
-    return queries[cacheKey(key, graphHash)] = mapping.getMax(graphHash, key)[0];
+    var pair = queries[cacheKey(graphHash, key)] = mapping.getMax(graphHash, key);
+    return pair[0];
   }
 }
 
 class MergeMapping implements LatMapping {
   private readonly mappings: LatMapping[];
-  private cache: Record<string, [any, Buffer]> = {};
+  private cache: Record<string, [JSON, Buffer]> = {};
   public latGraphs: Record<string, LatGraph>;
   constructor(mappings: LatMapping[]) {
     if (mappings.length === 0) {
@@ -45,7 +46,7 @@ class MergeMapping implements LatMapping {
     // }
     this.mappings = mappings;
   }
-  getMax(graphHash: Buffer, key: any): [any, Buffer] {
+  getMax(graphHash: Buffer, key: JSON): [JSON, Buffer] {
     let ckey = cacheKey(graphHash, key);
     if (ckey in this.cache) {
       return this.cache[ckey];
@@ -72,7 +73,7 @@ class MergeMapping implements LatMapping {
     if (!latGraph.isValue(key, join, isValueDeps)) {
       throw new Error('Join is not a value');
     }
-    let hash = crypto.hashJson([join, isValueQueries]);
+    let hash = hashJSON([join, isValueQueries]);
     return this.cache[ckey] = [join, hash];
   }
 }

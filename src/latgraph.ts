@@ -1,20 +1,21 @@
+import {JSON} from './crypto_util';
 
-export type Deps = (k: any, graph?: string) => any;
+export type Deps = (k: JSON, graph?: string) => JSON;
 
 export interface LatGraph {
   depGraphs: Record<string, Buffer>;
 
-  isKey(key: any): boolean;
+  isKey(key: JSON): boolean;
 
-  keyLt(key1: any, key2: any): boolean;
+  keyLt(key1: JSON, key2: JSON): boolean;
 
-  isValue(key: any, value: any, deps: Deps): boolean;
+  isValue(key: JSON, value: JSON, deps: Deps): boolean;
 
-  bottom(key: any, deps: Deps): any;
+  bottom(key: JSON, deps: Deps): JSON;
 
-  join(key: any, value1: any, value2: any, deps: Deps): any;
+  join(key: JSON, value1: JSON, value2: JSON, deps: Deps): any;
 
-  transport(key: any, value: any, deps1: Deps, deps2: Deps): any;
+  transport(key: JSON, value: JSON, deps1: Deps, deps2: Deps): any;
 }
 
 function toLatGraph(v: any): LatGraph {

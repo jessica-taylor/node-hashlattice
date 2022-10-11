@@ -1,4 +1,4 @@
-import crypto = require('./crypto_util');
+import {hashBytes} from './crypto_util';
 import computation = require('./computation');
 
 interface HashStore {
@@ -14,7 +14,7 @@ class MemoryHashStore implements HashStore {
   }
 
   hashPut(data: Buffer): Buffer {
-    var hash = crypto.hashBytes(data);
+    var hash = hashBytes(data);
     this.store[hash.toString('hex')] = data;
     return hash;
   }
