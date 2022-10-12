@@ -21,8 +21,12 @@ export function hashBytes(bs: Buffer): Hash {
   return crypto.createHash('sha256').update(bs).digest() as Hash;
 }
 
+export function stringifyJSON(js: JSON): string {
+  return cjson.stringify(js);
+}
+
 export function jsonToBuffer(js: JSON): Buffer {
-  return Buffer.from(cjson.stringify(js), 'utf8');
+  return Buffer.from(stringifyJSON(js), 'utf8');
 }
 
 export function hashJSON(js: JSON): Hash {
@@ -31,4 +35,8 @@ export function hashJSON(js: JSON): Hash {
 
 export function bufferToJSON(bs: Buffer): JSON {
   return JSON.parse(bs.toString('utf8')) as JSON;
+}
+
+export function equalJSON(js1: JSON, js2: JSON): boolean {
+  return stringifyJSON(js1) == stringifyJSON(js2);
 }
