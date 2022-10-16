@@ -1,221 +1,135 @@
 import {JSON, Hash, hashJSON, stringifyJSON, equalJSON} from './crypto_util';
-import {LatGraph, Deps} from './latgraph';
+import {LatticeType, Key} from './lattype';
 
 
 interface LatMapping {
-  latGraphs: Record<string, LatGraph>;
-  getMax(graphHash: Hash, key: JSON): [JSON, Hash];
+  latTypes: Record<string, LatticeType>;
+
+  getMax(key: Key): [JSON] | null;
 }
 
-interface LatDepsMapping extends LatMapping {
-  getDependents(graphHash: Hash, key: JSON): Array<[JSON, Hash]>;
-}
-
-function cacheKey(graphHash: Hash, key: JSON): string {
-  return `${graphHash.toString('hex')}${stringifyJSON(key)}`;
-}
-
-function mappingDeps(mapping: LatMapping, curr: Hash, queries: Record<string, [JSON, Hash]> = {}): Deps {
-  let currGraph = mapping.latGraphs[curr.toString('hex')];
-  if (!currGraph) {
-    throw new Error(`No graph with hash ${curr}`);
-  }
-  return function(key: JSON, graphName?: string) {
-    var graphHash = curr;
-    if (graphName) {
-      graphHash = currGraph.depGraphs[graphName];
-      if (!graphHash) {
-        throw new Error(`No graph named ${graphName}`);
-      }
-    }
-    var pair = queries[cacheKey(graphHash, key)] = mapping.getMax(graphHash, key);
-    return pair[0];
-  }
-}
-
-function recordDeps(rec: Record<string, [JSON, Hash]>, curr: Hash): Deps {
-  return function (key: JSON, graphName?: string) {
-    var graphHash = curr;
-    if (graphName) {
-      graphHash = currGraph.depGraphs[graphName];
-      if (!graphHash) {
-        throw new Error(`No graph named ${graphName}`);
-      }
-    }
-    var pair = rec[cacheKey(graphHash, key)];
-    if (!pair) {
-      throw new Error(`No value for ${key} in ${graphHash}`);
-    }
-    return pair[0];
-  }
-}
-
-function valueDeps(mapping: LatMapping, graphHash: Hash, key: JSON, value: JSON): Record<string, [JSON, Hash]> {
-  let isValueQueries = {};
-  let isValueDeps = mappingDeps(mapping, graphHash, isValueQueries);
-  if (!mapping.latGraphs[graphHash.toString('hex')].isValue(key, value, isValueDeps)) {
-    throw new Error('Bottom is not a value');
-  }
-  return isValueDeps;
-}
-
-class MergeMapping implements LatMapping {
-  private readonly mappings: LatMapping[];
-  private cache: Record<string, [JSON, Hash]> = {};
-  public latGraphs: Record<string, LatGraph>;
-  constructor(mappings: LatMapping[]) {
-    if (mappings.length === 0) {
-      throw new Error('MergeMapping must have at least one mapping');
-    }
-    this.latGraphs = mappings[0].latGraphs;
-    // for (const mapping of mappings) {
-    //   if (mapping.latGraph !== this.latGraph) {
-    //     throw new Error('mappings must have the same latGraph');
-    //   }
-    // }
-    this.mappings = mappings;
-  }
-  getMax(graphHash: Hash, key: JSON): [JSON, Hash] {
-    let ckey = cacheKey(graphHash, key);
-    if (ckey in this.cache) {
-      return this.cache[ckey];
-    }
-    let currs: [any, Hash][] = [];
-    for (const mapping of this.mappings) {
-      currs.push(mapping.getMax(graphHash, key));
-    }
-    if (new Set(currs.map(stringifyJSON)).size == 1) {
-      return this.cache[ckey] = currs[0];
-    }
-    let latGraph = this.latGraphs[graphHash.toString('hex')];
-    let deps = mappingDeps(this, graphHash);
-    let transports = [];
-    for (var i = 0; i < currs.length; ++i) {
-      transports.push(latGraph.transport(key, currs[i][0], mappingDeps(this.mappings[i], graphHash), deps));
-    }
-    let join = transports[0];
-    for (var i = 1; i < transports.length; ++i) {
-      join = latGraph.join(key, join, transports[i], deps);
-    }
-    let isValueQueries = valueDeps(this, graphHash, key, join);
-    let hash = hashJSON(isValueQueries);
-    return this.cache[ckey] = [join, hash];
-  }
-}
-
-class ModifyMapping implements LatMapping {
-
-  private readonly baseMapping: LatMapping;
-
-  private cache: Record<string, [JSON, Hash]> = {};
-
-  public latGraphs: Record<string, LatGraph>;
-
-  private readonly modifications: Record<string, JSON>;
-
-  constructor(baseMapping: LatMapping, private readonly modifications: Record<string, JSON>) {
-    this.baseMapping = baseMapping;
-    this.latGraphs = baseMapping.latGraphs;
-    this.modifications = modifications;
-  }
-}
+// export function joinMappingsAt(mapping1: LatMapping, mapping2: LatMapping, key: Key, rec: Record<string, JSON>): JSON {
+//   let latType = mapping.latTypes[key[0].toString('hex')];
+//   let comp = latType.getComputation(key[1]);
+//   if (comp[0] == 'return') {
+//     return comp[1];
+//   }
+//   if (comp[0] == 'bind') {
+//     let max1 = mapping1.getMax(key);
+//     let max2 = mapping2.getMax(key);
+//     if (max1 == null || max2 == null) {
+//       throw new Error('Unbound key');
+//     }
+//     let join = latType.join(max1, max2);
+//     rec[stringifyJSON(key)] = join;
+//     return evalComputation(mapping, comp[2](join));
+//   }
+//   if (comp[0] == 'let') {
+//     return evalComputation(mapping, comp[2](evalComputation(mapping, comp[1])));
+//   }
+//   if (comp[0] == 'tail') {
+//     return evalComputation(mapping, comp[1]);
+//   }
+//   throw new Error('Unknown computation');
+// }
+// 
+// // interface LatDB {
+// //   getMax(typeHash: Hash, key: JSON): null | [JSON];
+// // 
+// //   setMax(typeHash: Hash, key: JSON, value: null | [JSON]): void;
+// // }
+// 
+// class LatDBMapping implements LatMapping {
+//   public readonly latTypes: Record<string, LatticeType>;
+//   private readonly db: LatDB;
+// 
+//   constructor(db: LatDB, latTypes: Record<string, LatticeType>) {
+//     this.db = db;
+//     this.latTypes = latTypes;
+//   }
+// 
+//   public getMax(typeHash: Hash, key: JSON): JSON {
+//     let value = this.db.getMax(typeHash, key);
+//     if (value != null) {
+//       return value[0];
+//     }
+//     const type = this.latTypes[typeHash.toString('hex')];
+//     if (type == null) {
+//       throw new Error('unknown type');
+//     }
+//     return type.bottom(key);
+//   }
+// 
+//   public join(typeHash: Hash, key: JSON, value: JSON): JSON {
+//     const type = this.latTypes[typeHash.toString('hex')];
+//     if (type == null) {
+//       throw new Error('unknown type');
+//     }
+//     if (!type.isValue(key, value)) {
+//       throw new Error('invalid value');
+//     }
+//     const old = this.getMax(typeHash, key);
+//     const join = type.join(key, old, value);
+//     if (!equalJSON(join, old)) {
+//       if (equalJSON(join, type.bottom(key))) {
+//         this.db.setMax(typeHash, key, null);
+//       } else {
+//         this.db.setMax(typeHash, key, [join]);
+//       }
+//     }
+//   }
+// }
 
 
-interface LatDB {
-  currentVersion(): number;
-  incrementVersion(): number;
-
-  getMax(graphHash: Hash, key: JSON, version: number): number | null | [JSON, Hash];
-
-  setMax(graphHash: Hash, key: JSON, value: JSON, deps: Array<[Hash, JSON]>, version: number): Hash;
-  setDirty(graphHash: Hash, key: JSON): void;
-  removeMax(graphHash: Hash, key: JSON, version: number): void;
-
-  getDependents(graphHash: Hash, key: JSON, version: number): Array<[Hash, JSON]>;
-}
-
-class LatStore {
-  private readonly db: LatDB;
-  latGraphs: Record<string, LatGraph>;
-
-  constructor(db: LatDB, latGraphs: Record<string, LatGraph>) {
-    this.db = db;
-    this.latGraphs = latGraphs;
-  }
-
-  getMapping(version: number): LatMapping {
-    return {
-      latGraphs: this.latGraphs,
-      getMax: (graphHash: Hash, key: JSON) => {
-        return this.getMax(graphHash, key, version);
-      }
-    };
-  }
-
-  getMax(graphHash: Hash, key: JSON, version: number): [JSON, Hash] {
-    let latGraph = this.latGraphs[graphHash.toString('hex')];
-    let currDeps = mappingDeps(this.getMapping(version), graphHash);
-    let oldVPair = this.db.getMax(graphHash, key, version);
-    let oldV = oldVPair[0];
-    let oldPair = oldVPair[1];
-    if (oldV < version) {
-      let oldDeps = mappingDeps(this.getMapping(oldV), graphHash);
-      let transport = latGraph.transport(key, oldPair[0], oldDeps, currDeps);
-      let isValueQueries = valueDeps(this, graphHash, key, transport);
-      let depsHash = hashJSON(isValueQueries);
-      let bot = latGraph.bottom(key, mappingDeps(this, graphHash));
-      if (equalJSON(bot, transport)) {
-        this.db.removeMax(graphHash, key, version);
-      } else {
-        this.db.setMax(graphHash, key, transport, depsHash, version);
-      }
-      return [transport, depsHash];
-    }
-    if (oldPair) {
-      return oldPair;
-    }
-    let bot = latGraph.bottom(key, currDeps);
-    let isValueQueries = valueDeps(this, graphHash, key, bot);
-    let hash = this.db.hashPutDeps(isValueQueries);
-    return [bot, hash];
-  }
+// interface LatDepsMapping extends LatMapping {
+//   getDependents(typeHash: Hash, key: JSON): Array<[JSON, Hash]>;
+// }
 
 
-  setDirtyRec(graphHash: Hash, key: JSON) {
-    let version = this.db.currentVersion();
-    if (this.db.getMax(graphHash, key, version)[0] < version) {
-      return;
-    }
-    this.db.setDirty(graphHash, key);
-    this.setDependentsDirtyRec(graphHash, key);
-  }
+// function mappingDeps(mapping: LatMapping, curr: Hash, queries: Record<string, [JSON, Hash]> = {}): Deps {
+//   let currType = mapping.latTypes[curr.toString('hex')];
+//   if (!currType) {
+//     throw new Error(`No type with hash ${curr}`);
+//   }
+//   return function(key: JSON, typeName?: string) {
+//     var typeHash = curr;
+//     if (typeName) {
+//       typeHash = currType.depTypes[typeName];
+//       if (!typeHash) {
+//         throw new Error(`No type named ${typeName}`);
+//       }
+//     }
+//     var pair = queries[cacheKey(typeHash, key)] = mapping.getMax(typeHash, key);
+//     return pair[0];
+//   }
+// }
+// 
+// function recordDeps(rec: Record<string, [JSON, Hash]>, curr: Hash): Deps {
+//   return function (key: JSON, typeName?: string) {
+//     var typeHash = curr;
+//     if (typeName) {
+//       typeHash = currType.depTypes[typeName];
+//       if (!typeHash) {
+//         throw new Error(`No type named ${typeName}`);
+//       }
+//     }
+//     var pair = rec[cacheKey(typeHash, key)];
+//     if (!pair) {
+//       throw new Error(`No value for ${key} in ${typeHash}`);
+//     }
+//     return pair[0];
+//   }
+// }
 
-  setDependentsDirtyRec(graphHash: Hash, key: JSON) {
-    for (let pair of this.db.getDependents(graphHash, key)) {
-      this.setDirtyRec(pair[0], pair[1]);
-    }
-  }
+// function valueDeps(mapping: LatMapping, typeHash: Hash, key: JSON, value: JSON): Record<string, [JSON, Hash]> {
+//   let isValueQueries = {};
+//   let isValueDeps = mappingDeps(mapping, typeHash, isValueQueries);
+//   if (!mapping.latTypes[typeHash.toString('hex')].isValue(key, value, isValueDeps)) {
+//     throw new Error('Bottom is not a value');
+//   }
+//   return isValueDeps;
+// }
 
-  joinMax(graphHash: Hash, key: JSON, value: JSON) {
-    let version = this.db.currentVersion();
-    let latGraph = this.latGraphs[graphHash.toString('hex')];
-    let deps = mappingDeps(this.getMapping(version), graphHash);
-    let pair = this.getMax(graphHash, key);
-    if (!pair) {
-      let bot = latGraph.bottom(key, deps);
-      if (!equalJSON(bot, value)) {
-        this.db.setMax(graphHash, key, value, valueDeps(this, graphHash, key, value), version);
-        this.setDependentsDirtyRec(graphHash, key);
-      }
-      return;
-    }
-    if (!latGraph.isValue(key, value, deps)) {
-      throw new Error('value is not a value');
-    }
-    let join = latGraph.join(key, pair[0], value, deps);
-    if (!equalJSON(pair, [join, hashDeps])) {
-      this.db.setMax(graphHash, key, value, valueDeps(this, graphHash, key, value), version);
-      this.setDependentsDirtyRec(graphHash, key);
-    }
-  }
-}
+
+
+
