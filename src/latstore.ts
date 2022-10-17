@@ -1,5 +1,6 @@
-import {JSON, Hash, hashJSON, stringifyJSON, equalJSON} from './crypto_util';
-import {HashLookup, HashPut, HashModule, LatticeType, LatticeLookup, LatticePut, LatticeModule} from './lattype';
+import {JSON, Hash, parseJSON, hashJSON, stringifyJSON, equalJSON} from './crypto_util';
+import {Computation, evalComputation} from './computation';
+import {HashLookup, HashPut, LatticeType, LatticeLookup, LatticePut} from './lattype';
 
 
 export interface HashStore {
@@ -7,10 +8,6 @@ export interface HashStore {
   rawHashLookup(hash: Hash): Buffer | null;
 
   rawHashPut(value: Buffer): Hash;
-}
-
-export interface HashModuleStore extends HashStore {
-  getHashModule(hash: Hash): HashModule | null;
 }
 
 export interface LatticeStore {
@@ -22,19 +19,13 @@ export interface LatticeStore {
   rawSetMax(typ: Hash, key: JSON, value: JSON): void;
 }
 
-export interface LatticeModuleStore extends LatticeStore {
-
-  getLatticeModule(hash: Hash): LatticeModule | null;
-
-}
-
 class HashStoreLookup implements HashLookup, HashPut {
 
   // THIS HAS NO CACHING
 
-  private store: HashModuleStore;
+  private store: HashStore;
 
-  constructor(store: HashModuleStore) {
+  constructor(store: HashStore) {
     this.store = store;
   }
 
@@ -51,20 +42,21 @@ class HashStoreLookup implements HashLookup, HashPut {
     return this.store.rawHashPut(buf);
   }
 
-  hashCallImmut(mod: Hash, key: JSON): JSON {
-    let hm = this.store.getHashModule(mod);
-    if (hm == null) {
-      throw new Error('hash module not found');
-    }
-    return hm.callImmut(key, this);
+  hashEvalImmut(comp: Computation): JSON {
+    let api = {
+      hashLookup: (hash: Hash) => this.hashLookup(hash)
+    };
+    let res = evalComputation(comp, api);
+    return parseJSON(JSON.stringify(res));
   }
 
-  hashCallMut(mod: Hash, key: JSON): JSON {
-    let hm = this.store.getHashModule(mod);
-    if (hm == null) {
-      throw new Error('hash module not found');
-    }
-    return hm.callMut(key, this);
+  hashEvalMut(comp: Computation): JSON {
+    let api = {
+      hashLookup: (hash: Hash) => this.hashLookup(hash),
+      hashPut: (json: JSON) => this.hashPut(json)
+    };
+    let res = evalComputation(comp, api);
+    return parseJSON(JSON.stringify(res));
   }
 }
 
@@ -73,9 +65,9 @@ class LatticeStoreLookup implements LatticeLookup, LatticePut {
   // THIS HAS NO CACHING
 
   private hstore: HashStoreLookup;
-  private lstore: LatticeModuleStore;
+  private lstore: LatticeStore;
 
-  constructor(hstore: HashStoreLookup, lstore: LatticeModuleStore) {
+  constructor(hstore: HashStoreLookup, lstore: LatticeStore) {
     this.hstore = hstore;
     this.lstore = lstore;
   }
@@ -88,12 +80,12 @@ class LatticeStoreLookup implements LatticeLookup, LatticePut {
     return this.hstore.hashPut(json);
   }
 
-  hashCallImmut(mod: Hash, key: JSON): JSON {
-    return this.hstore.hashCallImmut(mod, key);
+  hashEvalImmut(comp: Computation): JSON {
+    return this.hstore.hashEvalImmut(comp);
   }
 
-  hashCallMut(mod: Hash, key: JSON): JSON {
-    return this.hstore.hashCallMut(mod, key);
+  hashEvalMut(comp: Computation): JSON {
+    return this.hstore.hashEvalMut(comp);
   }
 
   getMax(typ: Hash, key: JSON): null | [JSON] {
@@ -105,8 +97,7 @@ class LatticeStoreLookup implements LatticeLookup, LatticePut {
     if (ltyp == null) {
       throw new Error('lattice type not found');
     }
-    let isElemPair = ltyp.isElem(key, value);
-    let isElem = this.latCallImmut(isElemPair[0], isElemPair[1]);
+    let isElem = this.hashEvalImmut(ltyp.isElem(key, value));
     if (!isElem) {
       throw new Error('value is not an element of the lattice');
     }
@@ -115,12 +106,10 @@ class LatticeStoreLookup implements LatticeLookup, LatticePut {
       this.lstore.rawSetMax(typ, key, value);
       return;
     }
-    let joinPair = ltyp.join(key, oldMax[0], value);
-    let join = this.latCallMut(joinPair[0], joinPair[1]);
+    let join = this.hashEvalMut(ltyp.join(key, oldMax[0], value));
 
     if (!equalJSON(join, oldMax[0])) {
-      let joinElemPair = ltyp.isElem(key, join);
-      let joinElem = this.latCallImmut(joinElemPair[0], joinElemPair[1]);
+      let joinElem = this.hashEvalImmut(ltyp.isElem(key, join));
       if (!joinElem) {
         throw new Error('join is not an element of the lattice');
       }
@@ -128,21 +117,21 @@ class LatticeStoreLookup implements LatticeLookup, LatticePut {
     }
   }
 
-  latCallImmut(mod: Hash, key: JSON): JSON {
-    let m = this.lstore.getLatticeModule(mod);
-    if (m == null) {
-      throw new Error('lattice module not found');
-    }
-    return m.callImmut(key, this);
-  }
+  // latCallImmut(mod: Hash, key: JSON): JSON {
+  //   let m = this.lstore.getLatticeModule(mod);
+  //   if (m == null) {
+  //     throw new Error('lattice module not found');
+  //   }
+  //   return m.callImmut(key, this);
+  // }
 
-  latCallMut(mod: Hash, key: JSON): JSON {
-    let m = this.lstore.getLatticeModule(mod);
-    if (m == null) {
-      throw new Error('lattice module not found');
-    }
-    return m.callMut(key, this);
-  }
+  // latCallMut(mod: Hash, key: JSON): JSON {
+  //   let m = this.lstore.getLatticeModule(mod);
+  //   if (m == null) {
+  //     throw new Error('lattice module not found');
+  //   }
+  //   return m.callMut(key, this);
+  // }
 
 }
 

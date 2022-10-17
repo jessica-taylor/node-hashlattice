@@ -24,6 +24,7 @@ export class Project {
   private baseDir: string;
   private modules: Record<string, Computation> = {};
   private moduleHashes: Record<string, Hash> = {};
+  private hashToModule: Record<string, string> = {};
 
   constructor(baseDir: string) {
     this.baseDir = baseDir;
@@ -87,6 +88,7 @@ export class Project {
     }
     this.modules[mpath] = comp;
     this.moduleHashes[mpath] = hashJSON(comp);
+    this.hashToModule[this.moduleHashes[mpath].toString('hex')] = mpath;
   }
 }
 
