@@ -1,17 +1,15 @@
-import vm2 = require('vm2');
+import {VM} from 'vm2';
 import {JSON} from './crypto_util';
 
-export interface Computation {
+export type Computation = {
   code: string;
   data: Record<string, JSON>;
 };
 
 export function evalComputation(computation: Computation): any {
   const sandbox: Record<string, any> = {};
-  for (const name in computation.data) {
-    sandbox[name] = computation.data[name];
-  };
-  return vm2.runInNewContext(computation.code, sandbox);
+  sandbox.data = computation.data;
+  return new VM({sandbox}).run(computation.code);
 }
 
 export function constComputation(x: JSON): Computation {

@@ -1,3 +1,6 @@
 declare module 'vm2' {
-  export function runInNewContext(code: string, sandbox: Record<string, any>): any;
+  export class VM {
+    constructor(options: {sandbox: Record<string, any>});
+    run(code: string): any;
+  };
 }
